@@ -280,7 +280,7 @@ Canonical list of all spawned subagent tasks. Updated live.
 | T-104 | (orch) | Sacred Grove polish — central tree (destroyable, 500 HP), pickup-spawner logic | complete | 2026-04-24 | 2026-04-24 | src/game/arenas/sacredGrove/ |
 | T-106 | (orch) | In-match HUD v1 — HP bar, ability + ult radials, match timer, score bar; store HUD fields | complete | 2026-04-24 | 2026-04-24 | src/ui/hud/ |
 | T-102 | RS | VFX infrastructure (ParticlePool, Emitter, RibbonStrip, VFXController) + Anansi VFX (Silken Dart, Mirror Thread clone, Eight-Strand Dome, hit particles) | running | 2026-04-24 | — | /docs/agents/T-102.md |
-| T-105 | AI | Three bot difficulties for Anansi mirror — behavior trees, difficulty tuning | running | 2026-04-24 | — | /docs/agents/T-105.md |
+| T-105 | AI | Three bot difficulties for Anansi mirror — behavior trees, difficulty tuning | complete — 23 AI tests green; deterministic, seed-replayable | 2026-04-24 | 2026-04-24 | /docs/agents/T-105.md |
 
 Next TASK_ID: **T-104** (orchestrator — Sacred Grove polish).
 
