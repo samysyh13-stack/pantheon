@@ -25,14 +25,39 @@ export interface KeyboardTracker {
   setMouseButton(button: number, down: boolean): void;
 }
 
+/**
+ * Layout-fallback alias codes for each movement action. KeyboardEvent.code
+ * is layout-independent in the spec (e.g. "KeyW" always = the physical
+ * key in QWERTY-W position), but:
+ *   - Some AZERTY configurations (French) return `code` values that track
+ *     the labeled letter rather than the physical position — we want both
+ *     "press the key labeled Z" and "press the key labeled W" to work.
+ *   - Arrow keys are a near-universal accessibility fallback many
+ *     players expect alongside WASD/ZQSD.
+ *
+ * The primary binding from the keymap is checked first; aliases are
+ * OR-ed in. Remapping the primary via Settings doesn't disable the
+ * aliases — they're a safety net, not a user-facing binding.
+ */
+const MOVE_UP_ALIASES = ['KeyZ', 'ArrowUp'];
+const MOVE_DOWN_ALIASES = ['ArrowDown'];
+const MOVE_LEFT_ALIASES = ['KeyQ', 'ArrowLeft'];
+const MOVE_RIGHT_ALIASES = ['ArrowRight'];
+
+function anyDown(down: ReadonlySet<string>, primary: string, aliases: readonly string[]): boolean {
+  if (down.has(primary)) return true;
+  for (const alias of aliases) if (down.has(alias)) return true;
+  return false;
+}
+
 function evaluate(
   down: ReadonlySet<string>,
   keymap: Readonly<Record<InputAction, string>>,
 ): KeyboardSnapshot {
-  const up = down.has(keymap.moveUp) ? 1 : 0;
-  const dn = down.has(keymap.moveDown) ? 1 : 0;
-  const lt = down.has(keymap.moveLeft) ? 1 : 0;
-  const rt = down.has(keymap.moveRight) ? 1 : 0;
+  const up = anyDown(down, keymap.moveUp, MOVE_UP_ALIASES) ? 1 : 0;
+  const dn = anyDown(down, keymap.moveDown, MOVE_DOWN_ALIASES) ? 1 : 0;
+  const lt = anyDown(down, keymap.moveLeft, MOVE_LEFT_ALIASES) ? 1 : 0;
+  const rt = anyDown(down, keymap.moveRight, MOVE_RIGHT_ALIASES) ? 1 : 0;
   return {
     moveX: rt - lt,
     // Screen-space y goes down; gameplay convention has +y forward. Keep the
