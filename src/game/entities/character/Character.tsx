@@ -1,10 +1,32 @@
-// Character R3F component (T-004 AE).
+// Character R3F component (T-004 AE, extended in T-301 with the KayKit
+// Anansi placeholder mesh + animation mixer).
 //
 // Wraps a kinematic rigid body with a capsule collider, binds an input
 // source (the real InputManager or a mocked one) to the controller, and
 // mirrors derived state into the animation FSM each frame. Exposes an
 // imperative ref API for the Phase 2 combat layer (`applyHit` / `kill`)
 // and for HUD + camera consumers (`getState` / `getWorldPosition`).
+//
+// T-301 additions:
+//   - Loads `/models/anansi/Anansi.glb` via drei's `useGLTF` (preloaded at
+//     module scope so the first Canvas render doesn't stall on the network
+//     fetch). GLB ships the KayKit Rogue skinned mesh + 76 baked animation
+//     clips; see /docs/research/T-201-anansi-mesh.md for the authoring
+//     story.
+//   - Clones the loaded GLTF scene per-instance via
+//     `SkeletonUtils.clone(scene)`. Clone is mandatory because the
+//     `AnimationMixer` binds to a specific skeleton instance — two
+//     Characters sharing the source scene would alias animation state.
+//   - Tints every `Mesh` material's `color` to the per-god signature
+//     color (gold #D4A24A for Anansi). The KayKit texture atlas is
+//     near-neutral, so tint multiplication reads pure. This is cheaper
+//     than swapping to a new ToonMaterial per-mesh (keeps shader variant
+//     count under the 12-variant budget from ARCHITECTURE §9).
+//   - Owns an `AnimationMixer` per-instance. Each FSM state transition
+//     triggers a 0.2-s crossfade into the mapped clip (via
+//     `CLIP_MAP` + `pickClip` in `./animationClips.ts`). The mixer is
+//     driven by `useFrame`'s dt, which the R3F render loop delivers in
+//     seconds — matches T-004's determinism model (ADR-0006).
 //
 // The contract on `inputSource` is deliberately narrow: just a
 // `{ snapshot(playerIndex): InputFrame }` object. This is the exact shape
@@ -19,25 +41,81 @@
 //     single store subscription pattern would need explicit ids. Refs
 //     let the caller keep a map of `playerIndex -> ref`.
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import { CapsuleCollider, RigidBody, useRapier } from '@react-three/rapier';
 import type { RapierRigidBody } from '@react-three/rapier';
-import type { Mesh } from 'three';
-import { Vector3 } from 'three';
+import {
+  AnimationMixer,
+  Color,
+  LoopOnce,
+  LoopRepeat,
+  MeshStandardMaterial,
+  Object3D,
+  Vector3,
+} from 'three';
+import type { AnimationAction, AnimationClip, Material, Mesh } from 'three';
+import { SkeletonUtils } from 'three-stdlib';
 
 import { damp } from '../../../utils/math';
 
 import type { CharacterState, CharacterStats } from './types';
 import { createCharacterController, type CharacterController } from './controller';
 import { createAnimationFSM, type AnimationFSM } from './animationFSM';
-import { ToonMaterial } from '../../../rendering/materials';
+import { pickClip } from './animationClips';
 import type { InputFrame, PlayerIndex } from '../../systems/input';
 
 /** Capsule dimensions — DESIGN §4 "slightly heroic proportions". */
 const CAPSULE_RADIUS = 0.4;
 /** Half the cylinder-section height (total capsule height = 2*(halfHeight+radius) = 2.6 m). */
 const CAPSULE_HALF_HEIGHT = 0.9;
+
+/**
+ * Source GLB path. Keep in one place so both `useGLTF(...)` and the
+ * module-level `useGLTF.preload(...)` agree. The `public/` dir is served
+ * at the web root by Vite, so `/models/...` resolves to
+ * `/public/models/...` at dev-server + build time.
+ */
+const ANANSI_GLB_PATH = '/models/anansi/Anansi.glb';
+
+/**
+ * Capsule total height (2*(radius+halfHeight) = 2.6 m). Used to scale
+ * the KayKit rig (authored at ~1.8 m) up to the collider's total height
+ * so the visual and physics silhouettes match. 2.6 / 1.8 ≈ 1.44.
+ *
+ * Rationale: we keep the *physics* capsule fixed (controller stats,
+ * collision margins, camera offset in Camera.tsx are all tuned against
+ * the 2.6 m total height). Scaling the *mesh* to match is the cheapest
+ * correction — no rig surgery, no per-clip retargeting, no Blender pass.
+ * A multiplier node on the cloned scene's root propagates through the
+ * skinned mesh and the skeleton bones uniformly.
+ */
+const CAPSULE_TOTAL_HEIGHT = 2 * (CAPSULE_RADIUS + CAPSULE_HALF_HEIGHT);
+const KAYKIT_NATIVE_HEIGHT = 1.8;
+const MESH_SCALE = CAPSULE_TOTAL_HEIGHT / KAYKIT_NATIVE_HEIGHT;
+
+/**
+ * Vertical offset applied to the cloned mesh's local origin so the
+ * character's feet sit at the capsule's bottom. The capsule's
+ * center-of-collider is at y=0 in the RigidBody's local frame, and its
+ * bottom is at -(CAPSULE_RADIUS + CAPSULE_HALF_HEIGHT) = -1.3 m.
+ * KayKit meshes are authored with feet at y=0 in their own local frame.
+ * Lowering the mesh by the capsule's bottom offset puts the feet
+ * coincident with the capsule's base.
+ */
+const MESH_Y_OFFSET = -(CAPSULE_RADIUS + CAPSULE_HALF_HEIGHT);
+
+/** Crossfade duration for animation state transitions, in seconds. */
+const CROSSFADE_DURATION_S = 0.2;
+
+/**
+ * Preload the Anansi GLB at module scope so the first Canvas render
+ * doesn't block on network fetch. `useGLTF.preload` is drei's public API
+ * for this (kicks the `useLoader` cache asynchronously). Calling it once
+ * per module is safe — drei dedupes internally.
+ */
+useGLTF.preload(ANANSI_GLB_PATH);
 
 /**
  * Object exposed by the input manager's public API. Narrowly typed here
@@ -80,13 +158,19 @@ export interface CharacterProps {
   playerIndex: PlayerIndex;
   inputSource: InputSource;
   /**
-   * Optional color tint for the ToonMaterial's base color. Each god
-   * passes its signature color here (Anansi gold, Brigid ember, Susanoo
-   * storm cyan). Default is a neutral warm gray.
+   * Optional color tint for the character's material base color. Each
+   * god passes its signature color (Anansi gold, Brigid ember, Susanoo
+   * storm cyan). Default is a neutral warm gray — unlikely to be used
+   * in production since every god wrapper sets an explicit color, but
+   * avoids undefined-tint surprises in test harnesses.
    */
   color?: string;
   /**
-   * Optional rim light color. Defaults to white.
+   * Optional rim light color. Carried through for parity with the pre-
+   * T-301 capsule material props; not applied to the KayKit mesh in the
+   * current pass because the GLB's `MeshStandardMaterial`s don't expose
+   * a rim-intensity uniform. Reserved for Phase 3 when we swap back to
+   * a full ToonMaterial layer on the skinned mesh.
    */
   rimColor?: string;
   /** Deterministic RNG seed threaded into the controller (Phase 2 feature hook). */
@@ -111,13 +195,18 @@ export function Character(props: CharacterProps) {
     playerIndex,
     inputSource,
     color = '#c9a27a',
-    rimColor = '#ffffff',
     seed = 1,
     onHandleReady,
   } = props;
 
   const rbRef = useRef<RapierRigidBody | null>(null);
-  const meshRef = useRef<Mesh | null>(null);
+  // meshRef now points to the cloned-scene's root `Object3D`, which is
+  // what we rotate each frame for aim-alignment. `Mesh` is the old type
+  // when the visual was a capsule; `Object3D` is the broader type that
+  // includes Group / Scene from the GLB clone.
+  const meshRef = useRef<Object3D | null>(null);
+  const currentActionRef = useRef<AnimationAction | null>(null);
+  const currentClipStateRef = useRef<CharacterState | null>(null);
   const { world } = useRapier();
   const { camera } = useThree();
 
@@ -132,6 +221,93 @@ export function Character(props: CharacterProps) {
   const fsmRef = useRef<AnimationFSM>(createAnimationFSM());
   const controllerRef = useRef<CharacterController | null>(null);
   const deadRef = useRef<boolean>(false);
+
+  // Load the Anansi GLB. `useGLTF` suspends the component tree until the
+  // GLTFLoader resolves; Canvas.tsx wraps the scene in a <Suspense> so
+  // the first render's delay is absorbed without crashing. The hook
+  // returns a cached shared reference — we clone the scene below so
+  // each instance has its own skeleton state.
+  const gltf = useGLTF(ANANSI_GLB_PATH);
+
+  // Clone the source scene per-instance. `SkeletonUtils.clone` walks the
+  // object tree AND duplicates the `Skeleton` + skinned mesh bone map,
+  // so two Anansis on screen don't share bone transforms (which would
+  // make both characters play the same animation pose). Clone the clips
+  // array reference-only — `AnimationClip` objects are immutable shared
+  // resources; it's only the mixer that needs to be per-instance.
+  const clonedScene = useMemo<Object3D>(() => {
+    return SkeletonUtils.clone(gltf.scene);
+  }, [gltf.scene]);
+
+  // Apply per-instance material tint. We walk the cloned tree once on
+  // mount (and when `color` or `clonedScene` changes) and set each mesh
+  // material's base color. The KayKit GLB ships a single shared material
+  // reference, but `SkeletonUtils.clone` does NOT clone materials — so
+  // we defensively clone the material here to prevent one character's
+  // tint from leaking across to another. Without this guard, swapping
+  // Anansi for Brigid (different god colors) would recolor both.
+  useEffect(() => {
+    const tintColor = new Color(color);
+    clonedScene.traverse((obj: Object3D) => {
+      // `Mesh` has a `material` field; other Object3D subclasses don't.
+      // We duck-check by looking for the field rather than an
+      // instanceof (cheaper and tolerates proxied meshes).
+      const mesh = obj as Mesh;
+      if (mesh.isMesh && mesh.material !== undefined) {
+        // Material can be either a single material or an array.
+        // Normalize to an array for the clone-and-tint loop.
+        const mats: Material[] = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material];
+        const cloned = mats.map((m) => {
+          const c = m.clone();
+          // `MeshStandardMaterial` and its subclasses expose a `.color`
+          // (three.js Color). Feature-detect and tint when present —
+          // skips materials like MeshBasicMaterial that might not have
+          // a color in degenerate GLBs.
+          const withColor = c as MeshStandardMaterial;
+          if (withColor.color !== undefined && withColor.color.isColor === true) {
+            withColor.color.copy(tintColor);
+          }
+          return c;
+        });
+        // Re-assign: single-material meshes get the first cloned
+        // material; multi-material meshes keep array shape.
+        mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0]!;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  }, [clonedScene, color]);
+
+  // Mount the AnimationMixer once per instance. `new AnimationMixer(root)`
+  // binds the mixer to the cloned scene's skeleton — every subsequent
+  // `mixer.clipAction(clip)` returns an action scoped to THIS scene.
+  // We construct the mixer in a `useMemo` keyed on `clonedScene` so
+  // React's re-render semantics don't leak old mixers. (The gltf.scene
+  // reference is stable — drei caches the loaded GLTF — so the memo
+  // effectively runs once.)
+  const mixer = useMemo<AnimationMixer>(() => {
+    return new AnimationMixer(clonedScene);
+  }, [clonedScene]);
+
+  // Clips list is stable across renders (GLB is cached by drei).
+  // Memoize to pass a stable readonly array into pickClip calls.
+  const clips = useMemo<readonly AnimationClip[]>(() => gltf.animations, [gltf.animations]);
+
+  // Play the initial idle clip once the mixer and clips are available.
+  // This avoids a T-pose flash at mount — the skeleton's bind pose is
+  // a T-pose by default, and without a clip playing the mixer won't
+  // update the bone transforms.
+  useEffect(() => {
+    const action = pickClip(mixer, clips, 'idle');
+    if (action !== null) {
+      action.setLoop(LoopRepeat, Infinity);
+      action.reset().play();
+      currentActionRef.current = action;
+      currentClipStateRef.current = 'idle';
+    }
+  }, [mixer, clips]);
 
   // Set the mouse aim reference point on the input source (if it
   // supports it) so aim is computed relative to the character's screen
@@ -196,15 +372,75 @@ export function Character(props: CharacterProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [world]);
 
+  // Dispose the mixer on unmount. `stopAllAction` halts any in-flight
+  // transitions; `uncacheRoot` frees the skeleton binding. Both are safe
+  // no-ops on already-torn-down instances.
+  useEffect(() => {
+    return () => {
+      mixer.stopAllAction();
+      mixer.uncacheRoot(clonedScene);
+    };
+  }, [mixer, clonedScene]);
+
+  /**
+   * Crossfade the active animation action into the clip that matches
+   * the FSM's current state. No-op if the state hasn't changed since
+   * the last sync. Called each tick from `useFrame` so state changes
+   * are picked up on the same frame they happen.
+   *
+   * Wrapped in `useCallback` keyed on `mixer` + `clips` so the identity
+   * is stable across renders (dependencies are both stable-through-memo
+   * — drei caches the GLB, `SkeletonUtils.clone` runs once per mount).
+   */
+  const syncClipToState = useCallback(
+    (state: CharacterState): void => {
+      if (state === currentClipStateRef.current) return;
+      const prev = currentActionRef.current;
+      const next = pickClip(mixer, clips, state);
+      if (next === null) return;
+
+      // Death / hit / dodge / attack are one-shot clips; idle / running
+      // are looping. Clamp one-shots to their final frame so the skeleton
+      // holds the last pose until the next transition.
+      if (state === 'dead' || state === 'hit' || state === 'dodging' || state === 'attacking') {
+        next.setLoop(LoopOnce, 1);
+        next.clampWhenFinished = true;
+      } else {
+        next.setLoop(LoopRepeat, Infinity);
+        next.clampWhenFinished = false;
+      }
+
+      next.reset();
+      next.setEffectiveTimeScale(1);
+      next.setEffectiveWeight(1);
+      next.fadeIn(CROSSFADE_DURATION_S).play();
+      if (prev !== null && prev !== next) {
+        prev.fadeOut(CROSSFADE_DURATION_S);
+      }
+
+      currentActionRef.current = next;
+      currentClipStateRef.current = state;
+    },
+    [mixer, clips],
+  );
+
   useFrame((_state, dtSeconds) => {
     const ctrl = controllerRef.current;
     const fsm = fsmRef.current;
     const rb = rbRef.current;
+
+    // Always advance the mixer (even when dead) — the Death_A clip's
+    // tail pose depends on the mixer ticking through its last frame.
+    mixer.update(dtSeconds);
+
     if (!ctrl || !rb) return;
     if (deadRef.current) {
       // Dead: advance the FSM timer (for any death-anim budgeting) but
-      // do not sample input or move.
+      // do not sample input or move. The FSM state is already 'dead'
+      // so the next `syncClipToState` call below will pick the death
+      // clip and let it play out.
       fsm.tick(dtSeconds);
+      syncClipToState(fsm.current);
       return;
     }
 
@@ -240,6 +476,10 @@ export function Character(props: CharacterProps) {
     // Default mesh forward is -Z, so rotation.y = atan2(aimX, aimY) gives
     // the correct yaw. Critically-damped so the mesh turns smoothly
     // rather than snapping when the aim joystick flicks.
+    //
+    // T-301: the ref now points at the cloned-scene root (Object3D)
+    // instead of the old capsule <mesh>. Behavior is unchanged — rotation.y
+    // on the root propagates through the skinned mesh as a world rotation.
     const mesh = meshRef.current;
     if (mesh && input.aimMagnitude > 0) {
       const targetYaw = Math.atan2(input.aimX, input.aimY);
@@ -281,6 +521,11 @@ export function Character(props: CharacterProps) {
     // Advance the FSM time budget — auto-transitions (attack -> idle,
     // dodge -> idle, hit -> idle) fire here.
     fsm.tick(dtSeconds);
+
+    // Finally, crossfade the mixer into the clip that matches the FSM's
+    // current state. `syncClipToState` is a no-op if we're already on
+    // that state — so the tick-rate cost is a single ref compare.
+    syncClipToState(fsm.current);
   });
 
   return (
@@ -293,20 +538,19 @@ export function Character(props: CharacterProps) {
       enabledRotations={[false, false, false]}
     >
       <CapsuleCollider args={[CAPSULE_HALF_HEIGHT, CAPSULE_RADIUS]} friction={0.2} />
-      <mesh ref={meshRef} castShadow receiveShadow>
-        <capsuleGeometry
-          args={[CAPSULE_RADIUS, CAPSULE_HALF_HEIGHT * 2, 8, 16]}
-        />
-        <ToonMaterial color={color} rimColor={rimColor} rimIntensity={0.7} />
-        {/* Forward indicator — a small gold cone at the front of the capsule
-           so the player can see which way they're facing during Phase 1
-           testing. Phase 2 replaces the capsule with a rigged mesh and the
-           indicator goes away. */}
-        <mesh position={[0, 0.4, -CAPSULE_RADIUS - 0.1]} rotation={[Math.PI / 2, 0, 0]}>
-          <coneGeometry args={[0.1, 0.2, 8]} />
-          <meshStandardMaterial color={rimColor ?? '#ffd48a'} emissive={rimColor ?? '#ffd48a'} emissiveIntensity={0.3} />
-        </mesh>
-      </mesh>
+      {/* Cloned-scene wrapper. The inner primitive carries the KayKit
+          skinned mesh + skeleton + animation targets; the outer group
+          carries the scale + y-offset so the feet line up with the
+          capsule's base without mutating the scene's original transform.
+          The aim-rotation is applied to the same wrapper (meshRef) so
+          yaw propagates through the skeleton uniformly. */}
+      <group
+        ref={meshRef as unknown as React.Ref<Object3D>}
+        position={[0, MESH_Y_OFFSET, 0]}
+        scale={[MESH_SCALE, MESH_SCALE, MESH_SCALE]}
+      >
+        <primitive object={clonedScene} />
+      </group>
     </RigidBody>
   );
 }
