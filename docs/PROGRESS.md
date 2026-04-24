@@ -256,7 +256,7 @@ Canonical list of all spawned subagent tasks. Updated live.
 |---|---|---|---|---|---|---|
 | T-001 | IN | Unified input manager (kb+mouse+gamepad+touch, remap, multi-player) | complete | 2026-04-24 | 2026-04-24 | /docs/agents/T-001.md |
 | T-002 | RS | Rendering pipeline (canvas + post-process + toon/rim materials + environment + preset-driven effect stack) | running | 2026-04-24 | — | /docs/agents/T-002.md |
-| T-003 | RS2 | Research Scout — `three-nebula` viability vs hand-rolled instanced particles (Risk R-05) | running | 2026-04-24 | — | /docs/research/R-05.md |
+| T-003 | RS2 | Research Scout — `three-nebula` viability vs hand-rolled instanced particles (Risk R-05) | complete | 2026-04-24 | 2026-04-24 | /docs/research/R-05.md + ADR-0013 |
 
 Next TASK_ID: **T-004**.
 

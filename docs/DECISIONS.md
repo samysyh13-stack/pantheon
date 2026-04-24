@@ -237,4 +237,32 @@ Consequences: v1 shipping arena has a single overcast lighting setup — simpler
 
 ---
 
+## ADR-0013 — Hand-rolled InstancedMesh particle layer over three-nebula
+
+Date: 2026-04-24
+Status: Accepted
+
+Context: Risk R-05 in /docs/DESIGN_DOCUMENT.md §15 flagged `three-nebula`'s uncertain maintenance status and asked whether it is viable as the v1 particle engine. T-003 (RS2 Research Scout) investigated and wrote up the findings in /docs/research/R-05.md. Summary of dealbreakers:
+1. `three-nebula` GPURenderer is documented incompatible with iOS Safari (floating-point-texture dependency), leaving only the CPU SpriteRenderer on our most-constrained target — the opposite of what a 30 FPS iPhone 12 / Pixel 6 floor needs.
+2. Package is effectively stalled: last npm publish 2021-11-05, last master commit 2022-08-07, Snyk health 48/100, "Future of the library" meta-issue (#220) unanswered.
+3. No shipped `.d.ts` (only a single-author 2025 DefinitelyTyped package), no official R3F wrapper, historical bundle-bloat from shipping a duplicate three.js.
+4. Architecture is CPU-loop sprite/mesh, not `InstancedMesh` — poor draw-call story at scale without manual batching.
+
+Options considered:
+- A. Adopt `three-nebula` with its risks.
+- B. Adopt `three.quarks` (actively maintained, TypeScript-first, has an R3F package).
+- C. Hand-roll `InstancedMesh` + `Points` layer (~5 small building blocks: `ParticlePool`, `Emitter`, `particle.glsl`, `RibbonStrip`, `VFXController`). Use drei `<Sparkles />` / `<Trail />` tactically for pickup auras and projectile trails.
+- D. `<Sparkles />` / `<Trail />` only (too scoped for full v1 VFX — Anansi dome shimmer, Brigid fire-line ultimate, Susanoo Orochi's Wake ribbon).
+
+Decision: **C**. Hand-rolled layer in `src/vfx/` (Phase 2). Author once, reuse per god. Keep `three.quarks` as the escape-hatch fallback if hand-rolling blocks Phase 2 velocity; decision point at Phase 2 Day 8.
+
+Consequences:
+- Phase 2 gets ~6–9 engineer-days of up-front VFX infrastructure work before per-god kits. Anansi / Brigid / Susanoo VFX then become shader and sprite-atlas authoring, not engine authoring.
+- We own sprite-atlas packing (fits per-god 8 MB asset budget from R-15), mobile-safe draw-call count (1 call per pool), and accessibility Reduced Motion becomes a uniform scale (trivial).
+- Auto-downgrade to `THREE.Points` on the Mobile Low preset is a geometry swap with identical instance attributes.
+- Risk: if hand-rolling exceeds 9 engineer-days in Phase 2, we fall back to `three.quarks` per the research doc's watch-list plan. This is a re-scope we accept rather than shipping a dead dependency.
+- No net gain in repo footprint from three-nebula: the hand-rolled layer is ≤ 20 KB of TS/GLSL source plus a ≤ 256 KB sprite atlas, well under three-nebula's 2.91 MB unpacked bundle.
+
+---
+
 *End of Decisions Document. Additional ADRs appended as decisions land.*
