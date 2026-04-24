@@ -30,6 +30,34 @@ function Prop({ def, color }: { def: ColliderDef; color: string }) {
   );
 }
 
+/**
+ * Central tree anchored on the dais. Phase-2 T-104 polish per user spec:
+ * destroyable prop with 500 HP — hp-tagged but the visible-mesh + collider
+ * swap to a destroyed-stump on 0 HP is the Phase 3 combat-layer job. For
+ * Phase 2 we render the trunk + a simple lofted canopy so the arena has a
+ * visual landmark and a LOS-breaking centerpiece.
+ */
+function CentralTree() {
+  return (
+    <RigidBody type="fixed" colliders="cuboid" name="arena-central-tree" userData={{ hp: 500 }}>
+      {/* Trunk */}
+      <mesh position={[0, 1.75, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.35, 0.5, 3, 12]} />
+        <meshStandardMaterial color="#4a3a2c" roughness={1} metalness={0} />
+      </mesh>
+      {/* Canopy — two overlapping cones for a stylized lofted silhouette. */}
+      <mesh position={[0, 4, 0]} castShadow>
+        <coneGeometry args={[2.2, 2.2, 10]} />
+        <meshStandardMaterial color="#48624a" roughness={0.95} metalness={0} />
+      </mesh>
+      <mesh position={[0, 5, 0]} castShadow>
+        <coneGeometry args={[1.6, 1.8, 10]} />
+        <meshStandardMaterial color="#3a5440" roughness={0.95} metalness={0} />
+      </mesh>
+    </RigidBody>
+  );
+}
+
 export function SacredGrove() {
   const { groundSize, daisRadius, daisHeight, stormRadius } = ARENA_LAYOUT;
 
@@ -44,15 +72,17 @@ export function SacredGrove() {
         </mesh>
       </RigidBody>
 
-      {/* Central dais: warm sandstone circle. Approximated with a low-sided
-         cylinder; collider auto-generated as cuboid bounding, acceptable for
-         blockout. T-104 swaps to a proper convex hull. */}
+      {/* Central dais. Convex-hull collider on the cylinder gives clean
+         character step-on without the cuboid bounding weirdness. */}
       <RigidBody type="fixed" colliders="hull" name="arena-dais">
         <mesh position={[0, daisHeight / 2, 0]} castShadow receiveShadow>
           <cylinderGeometry args={[daisRadius, daisRadius, daisHeight, 48]} />
           <meshStandardMaterial color="#8b7860" roughness={0.8} metalness={0.05} />
         </mesh>
       </RigidBody>
+
+      {/* Central tree — visible landmark + LOS breaker + destroyable 500 HP */}
+      <CentralTree />
 
       {/* Shrines at cardinal compass points (breakable, 300 HP each). */}
       {SHRINES.map((s) => (
@@ -64,11 +94,16 @@ export function SacredGrove() {
         <Prop key={s.name} def={s} color="#4a5545" />
       ))}
 
-      {/* Storm boundary — purely visual in Phase 1. Phase 2 adds pushback force
-         + 10 dmg/s damage zone (DESIGN §7). */}
+      {/* Storm boundary — translucent pushback ring. Visible in Phase 2;
+         force-and-damage wiring is Phase 3 match-state integration. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
         <ringGeometry args={[stormRadius - 0.4, stormRadius, 96]} />
         <meshBasicMaterial color="#8aa2b5" transparent opacity={0.35} />
+      </mesh>
+      {/* Inner faint ring hinting at pickup-spawn radius for playtest feedback. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <ringGeometry args={[6.5, 6.7, 64]} />
+        <meshBasicMaterial color="#c9c4b7" transparent opacity={0.15} />
       </mesh>
     </group>
   );

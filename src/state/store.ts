@@ -56,7 +56,17 @@ export type MatchScreen = 'menu' | 'god-select' | 'loading' | 'match' | 'results
 
 export interface MatchSlice {
   screen: MatchScreen;
+  // Display-only HUD state. Simulation owns authoritative values via the
+  // Character handle + Phase 2 combat tick; these mirror to the HUD each
+  // render frame. Update via setMatchHudState.
   timerMs: number;
+  playerHp: number;
+  playerMaxHp: number;
+  playerUltCharge: number; // 0..1
+  playerAbilityCdMs: number; // 0..9999 ms remaining
+  playerAbilityMaxCdMs: number;
+  scoreP0: number;
+  scoreP1: number;
 }
 
 export interface AppState {
@@ -70,6 +80,8 @@ export interface AppState {
   setKeyboardBinding: (action: InputAction, code: string) => void;
   setGamepadBinding: (action: InputAction, buttonIndex: number) => void;
   setScreen: (s: MatchScreen) => void;
+  setMatchHudState: (patch: Partial<MatchSlice>) => void;
+  resetMatch: () => void;
 }
 
 // Default keyboard + gamepad bindings mirror /src/game/systems/input/defaults.ts.
@@ -157,7 +169,17 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       settings: defaultSettings,
-      match: { screen: 'menu', timerMs: 0 },
+      match: {
+        screen: 'menu',
+        timerMs: 0,
+        playerHp: 320, // Anansi baseline per ADR-0008
+        playerMaxHp: 320,
+        playerUltCharge: 0,
+        playerAbilityCdMs: 0,
+        playerAbilityMaxCdMs: 8000, // Anansi Mirror Thread 8 s CD
+        scoreP0: 0,
+        scoreP1: 0,
+      },
       setGraphicsPreset: (p) =>
         set((s) => ({ settings: { ...s.settings, graphicsPreset: p } })),
       setRenderer: (r) => set((s) => ({ settings: { ...s.settings, renderer: r } })),
@@ -198,6 +220,21 @@ export const useAppStore = create<AppState>()(
           },
         })),
       setScreen: (screen) => set((s) => ({ match: { ...s.match, screen } })),
+      setMatchHudState: (patch) => set((s) => ({ match: { ...s.match, ...patch } })),
+      resetMatch: () =>
+        set((s) => ({
+          match: {
+            screen: s.match.screen,
+            timerMs: 0,
+            playerHp: 320,
+            playerMaxHp: 320,
+            playerUltCharge: 0,
+            playerAbilityCdMs: 0,
+            playerAbilityMaxCdMs: 8000,
+            scoreP0: 0,
+            scoreP1: 0,
+          },
+        })),
     }),
     {
       name: 'panthenon-state',

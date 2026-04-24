@@ -9,3 +9,4 @@ export {
   type Vec3,
   type BoxDimensions,
 } from './colliders';
+export { createPickupSpawner, type Pickup, type PickupKind, type PickupSpawner } from './spawners';

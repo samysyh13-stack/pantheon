@@ -275,9 +275,14 @@ Canonical list of all spawned subagent tasks. Updated live.
 | T-004 | AE | Placeholder capsule character + Rapier kinematic controller + tracking camera + animation state machine | complete | 2026-04-24 | 2026-04-24 | /docs/agents/T-004.md |
 | T-005 | UX | Expand menus (main / settings / pause / god-select) + shared primitives + App routing integration notes | complete (13/14; #14 UI test deferred — @testing-library/react install + vitest `.tsx` glob pending) | 2026-04-24 | 2026-04-24 | /docs/agents/T-005.md |
 | T-003 | RS2 | Research Scout — `three-nebula` viability vs hand-rolled instanced particles (Risk R-05) | complete | 2026-04-24 | 2026-04-24 | /docs/research/R-05.md + ADR-0013 |
-| T-006 | PO | Phase 1 perf audit — bundle, draw calls, tris, physics, projected frame time | complete (static) — measured pass pending real-device (HARD STOP on deploy creds) | 2026-04-24 | 2026-04-24 | /docs/agents/T-006.md |
+| T-006 | PO | Phase 1 perf audit — bundle, draw calls, tris, physics, projected frame time | complete (static) | 2026-04-24 | 2026-04-24 | /docs/agents/T-006.md |
+| T-100 | CB | Anansi kit final numbers + counter-play scenarios + TTK analysis (§6.1) | complete | 2026-04-24 | 2026-04-24 | /docs/gods/ANANSI.md |
+| T-104 | (orch) | Sacred Grove polish — central tree (destroyable, 500 HP), pickup-spawner logic | complete | 2026-04-24 | 2026-04-24 | src/game/arenas/sacredGrove/ |
+| T-106 | (orch) | In-match HUD v1 — HP bar, ability + ult radials, match timer, score bar; store HUD fields | complete | 2026-04-24 | 2026-04-24 | src/ui/hud/ |
+| T-102 | RS | VFX infrastructure (ParticlePool, Emitter, RibbonStrip, VFXController) + Anansi VFX (Silken Dart, Mirror Thread clone, Eight-Strand Dome, hit particles) | running | 2026-04-24 | — | /docs/agents/T-102.md |
+| T-105 | AI | Three bot difficulties for Anansi mirror — behavior trees, difficulty tuning | running | 2026-04-24 | — | /docs/agents/T-105.md |
 
-Next TASK_ID: **T-100** (Phase 2).
+Next TASK_ID: **T-104** (orchestrator — Sacred Grove polish).
 
 ---
 
