@@ -1,0 +1,11 @@
+{
+  "avgFps": 3.2597776698574603,
+  "p50Fps": 3.3333333333333335,
+  "p95Fps": 3.1575623618566033,
+  "p99Fps": 3.000300030002974,
+  "frameCount": 196,
+  "durationMs": 60126.80000000447,
+  "targetUrl": "https://pantheon-292.pages.dev/",
+  "timestamp": "2026-04-24T11:16:04.837Z",
+  "consoleErrors": []
+}
