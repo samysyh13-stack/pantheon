@@ -248,7 +248,16 @@ export function Character(props: CharacterProps) {
   // Anansi for Brigid (different god colors) would recolor both.
   useEffect(() => {
     const tintColor = new Color(color);
+    // Weapon / accessory children to hide — Anansi is a trickster weaver,
+    // not a sword-rogue. KayKit Rogue_Hooded ships with a dagger + quiver;
+    // match by case-insensitive substring of the node name to catch
+    // variants like `Sword_Rogue`, `Dagger_L`, `Bow`, `Crossbow`, etc.
+    const WEAPON_RE = /sword|dagger|axe|bow|crossbow|arrow|quiver|shield|mug|spear/i;
     clonedScene.traverse((obj: Object3D) => {
+      if (obj.name && WEAPON_RE.test(obj.name)) {
+        obj.visible = false;
+        return;
+      }
       // `Mesh` has a `material` field; other Object3D subclasses don't.
       // We duck-check by looking for the field rather than an
       // instanceof (cheaper and tolerates proxied meshes).
@@ -268,6 +277,19 @@ export function Character(props: CharacterProps) {
           const withColor = c as MeshStandardMaterial;
           if (withColor.color !== undefined && withColor.color.isColor === true) {
             withColor.color.copy(tintColor);
+            // Drop the baked texture so the gold tint reads pure. The
+            // KayKit atlas is colorful (green hood, orange armor) — kept
+            // as-is it multiplies with the gold and the hue wins the
+            // battle. Mythological-deity read > Minecraft-block read.
+            // Phase 4 polish can re-introduce a neutral-atlas tint if
+            // a custom toon-shaded variant is authored.
+            withColor.map = null;
+            if (withColor.emissive !== undefined) {
+              // Subtle gold rim glow — helps the silhouette pop against
+              // the Sacred Grove overcast palette (ADR-0012).
+              withColor.emissive.copy(tintColor).multiplyScalar(0.15);
+            }
+            withColor.needsUpdate = true;
           }
           return c;
         });
