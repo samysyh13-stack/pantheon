@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PANTHÉON — Privacy Policy</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        font-family: Inter, system-ui, sans-serif;
+        background: #0f1218;
+        color: #e8e4dc;
+        margin: 0;
+        padding: 48px 24px;
+        line-height: 1.5;
+      }
+      main { max-width: 720px; margin: 0 auto; }
+      h1 { font-family: Cinzel, serif; letter-spacing: 0.05em; }
+      h2 { margin-top: 2.5em; }
+      a { color: #d4a24a; }
+      code { background: #1a1e27; padding: 2px 6px; border-radius: 4px; }
+      .meta { color: #9a958a; font-size: 0.875em; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PANTHÉON — Privacy Policy</h1>
+      <p class="meta">Last updated 2026-04-24 — v1.0.0</p>
+
+      <h2>Summary</h2>
+      <p>PANTHÉON collects no personal data by default. No account is needed. No tracking cookies. No advertisements. Your gameplay state is stored locally in your browser's IndexedDB and never leaves your device.</p>
+
+      <h2>What we store locally</h2>
+      <ul>
+        <li>Your settings (graphics preset, audio volumes, keybindings, accessibility options) — in your browser's IndexedDB under the database name <code>panthenon</code>.</li>
+        <li>Your match history (up to 20 matches, metadata only: god played, duration, win/loss) — same local database.</li>
+      </ul>
+      <p>None of this leaves your device. Clearing your browser's site data removes it all.</p>
+
+      <h2>Optional analytics</h2>
+      <p>If the build has <code>VITE_PLAUSIBLE_DOMAIN</code> configured, anonymous page-view + match-start counts are sent to <a href="https://plausible.io/" target="_blank" rel="noopener">Plausible</a>, a privacy-first analytics service that does not use cookies and does not profile users. Personal data is never collected. Our production deploy may enable this for basic usage counts; you can check in your browser's network tab.</p>
+
+      <h2>Optional error reporting</h2>
+      <p>If the build has <code>VITE_SENTRY_DSN</code> configured, JavaScript errors are sent to <a href="https://sentry.io/" target="_blank" rel="noopener">Sentry</a> to help us fix bugs. PII (IP addresses, identifiers) is stripped client-side before transmission.</p>
+
+      <h2>Third-party content</h2>
+      <p>All 3D models, audio, and fonts used by the game are covered under CC0 or open-font licenses — see <a href="https://github.com/samysyh13-stack/pantheon/blob/main/docs/CREDITS.md" target="_blank" rel="noopener">CREDITS.md</a>. No third-party tracking scripts are included.</p>
+
+      <h2>Your rights</h2>
+      <p>Because no personal data is collected or stored outside your device, there is nothing for us to export, correct, or delete on your behalf. You can clear your browser's site data at any time to remove local state.</p>
+
+      <h2>Contact</h2>
+      <p>For any question: <a href="mailto:samy.syh13@gmail.com">samy.syh13@gmail.com</a> or <a href="https://github.com/samysyh13-stack/pantheon/issues" target="_blank" rel="noopener">open an issue on GitHub</a>.</p>
+
+      <p style="margin-top: 4em;"><a href="/">← Back to PANTHÉON</a></p>
+    </main>
+  </body>
+</html>

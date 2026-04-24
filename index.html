@@ -2,11 +2,54 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0f1218" />
+    <meta name="color-scheme" content="dark" />
+
+    <title>PANTHÉON — Mythological Brawler</title>
+    <meta name="description" content="A stylized 3D mythological brawler for browser and mobile. Play Anansi in 2-minute matches. Free, no install, no account. PWA installable." />
+
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>scaffold</title>
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+    <!-- Fonts: preconnect for Cinzel + Inter display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pantheon-292.pages.dev/" />
+    <meta property="og:title" content="PANTHÉON — Mythological Brawler" />
+    <meta property="og:description" content="Stylized 3D brawler. Anansi vs bots. 2-minute matches. Browser + mobile PWA. Zero monetization." />
+    <meta property="og:image" content="https://pantheon-292.pages.dev/icons/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://pantheon-292.pages.dev/" />
+    <meta name="twitter:title" content="PANTHÉON — Mythological Brawler" />
+    <meta name="twitter:description" content="Stylized 3D brawler. Anansi vs bots. 2-minute matches. Browser + mobile PWA. Zero monetization." />
+    <meta name="twitter:image" content="https://pantheon-292.pages.dev/icons/og-image.png" />
+
+    <!-- iOS PWA hints -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Panthéon" />
+
+    <!-- Touch / zoom / selection discipline (game UI) -->
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
   </head>
   <body>
+    <noscript>
+      <div style="font-family: system-ui, sans-serif; color: #e8e4dc; background: #0f1218; padding: 32px; min-height: 100vh;">
+        <h1>PANTHÉON</h1>
+        <p>This game requires JavaScript. Please enable it and reload.</p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
