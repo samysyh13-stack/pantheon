@@ -249,12 +249,22 @@ export function Character(props: CharacterProps) {
   useEffect(() => {
     const tintColor = new Color(color);
     // Weapon / accessory children to hide — Anansi is a trickster weaver,
-    // not a sword-rogue. KayKit Rogue_Hooded ships with a dagger + quiver;
-    // match by case-insensitive substring of the node name to catch
-    // variants like `Sword_Rogue`, `Dagger_L`, `Bow`, `Crossbow`, etc.
-    const WEAPON_RE = /sword|dagger|axe|bow|crossbow|arrow|quiver|shield|mug|spear/i;
+    // not a sword-rogue. KayKit Rogue_Hooded's actual node names (verified
+    // via in-browser GLB inspection): Knife_Offhand, Knife, 1H_Crossbow,
+    // 2H_Crossbow, Throwable. We use an exact-name set + a prefix regex so
+    // we don't false-match IK bones (e.g., elbowIK.l used to get caught
+    // by an earlier regex that included "bow").
+    const WEAPON_EXACT = new Set([
+      'Knife',
+      'Knife_Offhand',
+      'Knife_Mainhand',
+      'Throwable',
+      'Quiver',
+      'Rogue_Cape_Hood', // if it shows up; real hood is part of Rogue_Head_Hooded mesh
+    ]);
+    const WEAPON_PREFIX_RE = /^(1H|2H)_(Sword|Axe|Dagger|Bow|Crossbow|Shield|Hammer|Staff|Rod|Spear|Mace|Pickaxe|Flail|Knife)/i;
     clonedScene.traverse((obj: Object3D) => {
-      if (obj.name && WEAPON_RE.test(obj.name)) {
+      if (obj.name && (WEAPON_EXACT.has(obj.name) || WEAPON_PREFIX_RE.test(obj.name))) {
         obj.visible = false;
         return;
       }
@@ -490,21 +500,40 @@ export function Character(props: CharacterProps) {
     // and applies it via setNextKinematicTranslation.
     ctrl.update(input, dtSeconds);
 
-    // Aim-driven visual rotation (Fix 1). Rotate the mesh (not the RigidBody,
-    // whose rotations are locked for physics stability) to face the aim
-    // vector in world space. Stick coords map to world as:
-    //   aimX (stick right) → world +X
-    //   aimY (stick up)    → world -Z   (camera looks down +Z)
-    // Default mesh forward is -Z, so rotation.y = atan2(aimX, aimY) gives
-    // the correct yaw. Critically-damped so the mesh turns smoothly
-    // rather than snapping when the aim joystick flicks.
+    // Visual yaw rotation. Priority:
+    //   1. When MOVING (moveMag >= threshold): face movement direction.
+    //      This matches the "character goes where you go" brawler feel
+    //      (Brawl Stars / MOBA-likes) and is what desktop mouse-aim users
+    //      expect when running without actively targeting.
+    //   2. When STATIONARY AND aim is significantly deflected: face aim.
+    //      Gives a "look around while standing" tell when the mouse is
+    //      pulled far from the character — useful for pre-aim before
+    //      committing to a shot.
+    //   3. Otherwise: no rotation (mesh stays as-is).
     //
-    // T-301: the ref now points at the cloned-scene root (Object3D)
-    // instead of the old capsule <mesh>. Behavior is unchanged — rotation.y
-    // on the root propagates through the skinned mesh as a world rotation.
+    // Rationale for this priority (vs aim-always): the mouse ALWAYS has
+    // some non-zero magnitude relative to the character's screen position
+    // (because the character moves but the cursor doesn't), so
+    // aim-always caused the mesh to constantly swing toward the cursor
+    // even when the player was just running. Bad feel + disorienting.
+    //
+    // Yaw math: default mesh forward is -Z. Rotating by θ around Y makes
+    // forward = (sin θ, 0, -cos θ). For target direction (dx, 0, dz),
+    // θ = atan2(dx, -dz). Both input axes (move + aim) are stick-space
+    // where Y=up maps to world -Z, so the -dz substitution cancels the
+    // stick's Y-up sign → θ = atan2(stickX, stickY). Same formula for
+    // both inputs; we just pick which stick drives it.
+    const MOVE_FACE_THRESHOLD = 0.1;
+    const AIM_FACE_THRESHOLD = 0.4;
+    const moveMag = Math.hypot(input.moveX, input.moveY);
+    let targetYaw: number | null = null;
+    if (moveMag >= MOVE_FACE_THRESHOLD) {
+      targetYaw = Math.atan2(input.moveX, input.moveY);
+    } else if (input.aimMagnitude >= AIM_FACE_THRESHOLD) {
+      targetYaw = Math.atan2(input.aimX, input.aimY);
+    }
     const mesh = meshRef.current;
-    if (mesh && input.aimMagnitude > 0) {
-      const targetYaw = Math.atan2(input.aimX, input.aimY);
+    if (mesh && targetYaw !== null) {
       // Shortest-arc wrap: keep the delta in [-π, π] so we don't spin
       // the long way around when crossing the ±π branch cut.
       let current = mesh.rotation.y;
