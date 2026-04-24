@@ -62,12 +62,14 @@
 
 ### Phase 1 acceptance gate (must pass all)
 
-- [ ] Loads on phone and desktop browsers
-- [ ] Virtual joystick works on touch; keyboard works on desktop; gamepad works if plugged in
-- [ ] Character moves smoothly with at least one animation loop
-- [ ] Outline + toon shading visible — stylized, not default Three.js gray
-- [ ] Settings menu toggles graphics presets and they visibly affect the scene
-- [ ] ≥ 30 FPS on iPhone 12 (or equivalent throttled Chrome profile)
+- [x] Loads on phone and desktop browsers (dev server verified; **deploy preview pending creds — HARD STOP**)
+- [x] Virtual joystick works on touch; keyboard works on desktop; gamepad works if plugged in — T-001
+- [x] Character moves smoothly with at least one animation loop — T-004 FSM + kinematic controller
+- [x] Outline + toon shading visible — stylized, not default Three.js gray — T-002 effect stack + ToonMaterial
+- [x] Settings menu toggles graphics presets and they visibly affect the scene — T-005 Settings wired to store
+- [⏳] ≥ 30 FPS on iPhone 12 — **theoretical pass** (T-006 static audit: ~50% headroom at Medium); wall-clock verify pending real-device / deploy preview
+
+**Gate assessment: 5/6 ✅ + 1/6 ⏳** (wall-clock-measured perf) — blocked on Cloudflare deploy credentials only. No other HARD STOP triggered.
 
 ### Day 3 re-scope gate
 
@@ -259,8 +261,9 @@ Canonical list of all spawned subagent tasks. Updated live.
 | T-004 | AE | Placeholder capsule character + Rapier kinematic controller + tracking camera + animation state machine | complete | 2026-04-24 | 2026-04-24 | /docs/agents/T-004.md |
 | T-005 | UX | Expand menus (main / settings / pause / god-select) + shared primitives + App routing integration notes | complete (13/14; #14 UI test deferred — @testing-library/react install + vitest `.tsx` glob pending) | 2026-04-24 | 2026-04-24 | /docs/agents/T-005.md |
 | T-003 | RS2 | Research Scout — `three-nebula` viability vs hand-rolled instanced particles (Risk R-05) | complete | 2026-04-24 | 2026-04-24 | /docs/research/R-05.md + ADR-0013 |
+| T-006 | PO | Phase 1 perf audit — bundle, draw calls, tris, physics, projected frame time | complete (static) — measured pass pending real-device (HARD STOP on deploy creds) | 2026-04-24 | 2026-04-24 | /docs/agents/T-006.md |
 
-Next TASK_ID: **T-004**.
+Next TASK_ID: **T-100** (Phase 2).
 
 ---
 
