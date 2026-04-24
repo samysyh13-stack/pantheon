@@ -118,16 +118,26 @@ export function detectPreset(): Exclude<GraphicsPreset, 'auto'> {
     navigator as Navigator & { getBattery?: () => Promise<{ level: number; charging: boolean }> }
   ).getBattery;
 
+  // Phase 1 Fix 4: never auto-pick Low/Battery. The outline post-process at
+  // 1 px can render near-invisible on small mobile displays under the Low
+  // preset's other reductions; Medium is the reliable visibility floor.
+  // Players can still manually select Low/Battery via Settings > Graphics.
   if (!isMobile) {
     if (cores >= 8 && mem >= 16) return 'ultra';
     if (cores >= 6 && mem >= 8) return 'high';
     return 'medium';
   }
 
-  // mobile
+  // Mobile tier table. Auto-floor is 'medium'; a low-end device the heuristic
+  // would have routed to 'low' now gets 'medium' with a console warning so
+  // devs know why FPS may be struggling.
   if (cores >= 6 && mem >= 6) return 'high';
   if (cores >= 4 && mem >= 4) return 'medium';
-  return 'low';
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[presets] hardware heuristic would have picked Low; forcing Medium floor for outline visibility. Users on genuine low-end can manually select Low in Settings > Graphics.',
+  );
+  return 'medium';
   void battery; // battery-preset heuristic wired in Phase 4 polish
 }
 

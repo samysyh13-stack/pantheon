@@ -232,12 +232,16 @@ describe('detectPreset', () => {
     expect(detectPreset()).toBe('medium');
   });
 
-  it("weak mobile (2 cores, 2 GB, Android UA) → 'low'", () => {
+  it("weak mobile (2 cores, 2 GB, Android UA) → 'medium' floor (Phase 1 Fix 4)", () => {
+    // Phase 1 Fix 4: auto-detect never returns Low/Battery. Outline post-
+    // process visibility is the gating constraint on that floor; users on
+    // genuine low-end hardware can still manually pick Low in Settings >
+    // Graphics.
     restore = stubNavigator({
       hardwareConcurrency: 2,
       deviceMemory: 2,
       userAgent: 'Mozilla/5.0 (Linux; Android 12; low-end) Mobile Safari/537.36',
     });
-    expect(detectPreset()).toBe('low');
+    expect(detectPreset()).toBe('medium');
   });
 });

@@ -23,7 +23,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { CapsuleCollider, RigidBody, useRapier } from '@react-three/rapier';
 import type { RapierRigidBody } from '@react-three/rapier';
+import type { Mesh } from 'three';
 import { Vector3 } from 'three';
+
+import { damp } from '../../../utils/math';
 
 import type { CharacterState, CharacterStats } from './types';
 import { createCharacterController, type CharacterController } from './controller';
@@ -114,8 +117,13 @@ export function Character(props: CharacterProps) {
   } = props;
 
   const rbRef = useRef<RapierRigidBody | null>(null);
+  const meshRef = useRef<Mesh | null>(null);
   const { world } = useRapier();
   const { camera } = useThree();
+
+  // Rotation damping: keeps the character turning smoothly rather than snapping
+  // when the aim stick flicks. Critically-damped lambda = 12 converges in ~350 ms.
+  const AIM_TURN_LAMBDA = 12;
 
   // Animation FSM lives in a ref so it's not re-created on re-render.
   // The controller is constructed lazily (see effect below) because it
@@ -224,6 +232,27 @@ export function Character(props: CharacterProps) {
     // and applies it via setNextKinematicTranslation.
     ctrl.update(input, dtSeconds);
 
+    // Aim-driven visual rotation (Fix 1). Rotate the mesh (not the RigidBody,
+    // whose rotations are locked for physics stability) to face the aim
+    // vector in world space. Stick coords map to world as:
+    //   aimX (stick right) → world +X
+    //   aimY (stick up)    → world -Z   (camera looks down +Z)
+    // Default mesh forward is -Z, so rotation.y = atan2(aimX, aimY) gives
+    // the correct yaw. Critically-damped so the mesh turns smoothly
+    // rather than snapping when the aim joystick flicks.
+    const mesh = meshRef.current;
+    if (mesh && input.aimMagnitude > 0) {
+      const targetYaw = Math.atan2(input.aimX, input.aimY);
+      // Shortest-arc wrap: keep the delta in [-π, π] so we don't spin
+      // the long way around when crossing the ±π branch cut.
+      let current = mesh.rotation.y;
+      const twoPi = Math.PI * 2;
+      let delta = ((targetYaw - current) % twoPi + twoPi) % twoPi;
+      if (delta > Math.PI) delta -= twoPi;
+      current = damp(current, current + delta, AIM_TURN_LAMBDA, dtSeconds);
+      mesh.rotation.y = current;
+    }
+
     // Mirror controller-derived edges into the FSM. Order matters:
     //   1) dead is already short-circuited above, so skip here.
     //   2) dodge edge takes precedence over attack edge — the FSM
@@ -264,11 +293,19 @@ export function Character(props: CharacterProps) {
       enabledRotations={[false, false, false]}
     >
       <CapsuleCollider args={[CAPSULE_HALF_HEIGHT, CAPSULE_RADIUS]} friction={0.2} />
-      <mesh castShadow receiveShadow>
+      <mesh ref={meshRef} castShadow receiveShadow>
         <capsuleGeometry
           args={[CAPSULE_RADIUS, CAPSULE_HALF_HEIGHT * 2, 8, 16]}
         />
         <ToonMaterial color={color} rimColor={rimColor} rimIntensity={0.7} />
+        {/* Forward indicator — a small gold cone at the front of the capsule
+           so the player can see which way they're facing during Phase 1
+           testing. Phase 2 replaces the capsule with a rigged mesh and the
+           indicator goes away. */}
+        <mesh position={[0, 0.4, -CAPSULE_RADIUS - 0.1]} rotation={[Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[0.1, 0.2, 8]} />
+          <meshStandardMaterial color={rimColor ?? '#ffd48a'} emissive={rimColor ?? '#ffd48a'} emissiveIntensity={0.3} />
+        </mesh>
       </mesh>
     </RigidBody>
   );

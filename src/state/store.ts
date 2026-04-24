@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { dexieStorage } from '../persistence/db';
 
 export type GraphicsPreset = 'ultra' | 'high' | 'medium' | 'low' | 'battery' | 'auto';
 export type ColorblindMode = 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
@@ -201,7 +202,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'panthenon-state',
       version: 2,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => dexieStorage),
       partialize: (state) => ({ settings: state.settings }),
       migrate: (persisted, version) => {
         if (version < 2) return migrateV1ToV2(persisted);

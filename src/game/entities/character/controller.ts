@@ -125,6 +125,17 @@ export interface CharacterController {
    */
   consumeBasicAttackEdge(): boolean;
   /**
+   * Edge-triggered: returns `true` exactly once per ability input
+   * rising edge. Consumed in Phase 2 by the kit's signature ability
+   * handler (Anansi Mirror Thread, Brigid Hearthstone, etc.).
+   */
+  consumeAbilityEdge(): boolean;
+  /**
+   * Edge-triggered: returns `true` exactly once per ultimate input
+   * rising edge. Gated further by Phase-2 ult-charge state (§6.1–6.3).
+   */
+  consumeUltimateEdge(): boolean;
+  /**
    * Current planar speed in m/s (hypot of velocity xz). Used by the
    * Character component to drive idle <-> running FSM transitions.
    */
@@ -157,12 +168,16 @@ interface ControllerInternal {
   dodgeCooldownMs: number; // time remaining before next dodge is allowed
   dodgeDirX: number; // latched direction at dodge-start (unit)
   dodgeDirZ: number;
-  // Edge detection
+  // Edge detection — previous-frame held state, per action
   prevDodgeHeld: boolean;
   prevBasicAttackHeld: boolean;
+  prevAbilityHeld: boolean;
+  prevUltimateHeld: boolean;
   // Edges that `consume*Edge()` will return on the next read
   pendingDodgeEdge: boolean;
   pendingBasicAttackEdge: boolean;
+  pendingAbilityEdge: boolean;
+  pendingUltimateEdge: boolean;
   // Seeded RNG — carried for Phase 2 features (footstep surface picks,
   // hit-flash variation). Not used by the controller itself today.
   rng: Rng;
@@ -193,8 +208,12 @@ export function createCharacterController(deps: ControllerDeps): CharacterContro
     dodgeDirZ: 0,
     prevDodgeHeld: false,
     prevBasicAttackHeld: false,
+    prevAbilityHeld: false,
+    prevUltimateHeld: false,
     pendingDodgeEdge: false,
     pendingBasicAttackEdge: false,
+    pendingAbilityEdge: false,
+    pendingUltimateEdge: false,
     rng: createRng(config.seed),
   };
 
@@ -202,20 +221,47 @@ export function createCharacterController(deps: ControllerDeps): CharacterContro
     if (!(dt > 0)) return;
     const dtMs = dt * 1000;
 
-    // 1) Rising-edge detection for dodge + basic attack. The input
-    //    manager already emits booleans held-for-the-whole-duration;
-    //    edges are the controller's job.
+    // 1) Rising-edge detection for all action buttons. The input manager
+    //    emits booleans held-for-the-whole-duration; edges are the
+    //    controller's job.
     const dodgeEdge = input.dodge && !self.prevDodgeHeld;
     const basicEdge = input.basicAttack && !self.prevBasicAttackHeld;
+    const abilityEdge = input.ability && !self.prevAbilityHeld;
+    const ultimateEdge = input.ultimate && !self.prevUltimateHeld;
     self.prevDodgeHeld = input.dodge;
     self.prevBasicAttackHeld = input.basicAttack;
+    self.prevAbilityHeld = input.ability;
+    self.prevUltimateHeld = input.ultimate;
 
-    if (basicEdge) self.pendingBasicAttackEdge = true;
+    // Phase 1 Fix 6: action stubs. Validate the end-to-end input → action
+    // pipeline before Phase 2 combat lands real behaviour on top. Replaced
+    // by T-100 CB kit wiring in Phase 2.
+    if (basicEdge) {
+      // eslint-disable-next-line no-console
+      console.log('[action] basic_attack', {
+        aimX: input.aimX,
+        aimY: input.aimY,
+        aimMagnitude: input.aimMagnitude,
+      });
+      self.pendingBasicAttackEdge = true;
+    }
+    if (abilityEdge) {
+      // eslint-disable-next-line no-console
+      console.log('[action] ability');
+      self.pendingAbilityEdge = true;
+    }
+    if (ultimateEdge) {
+      // eslint-disable-next-line no-console
+      console.log('[action] ultimate');
+      self.pendingUltimateEdge = true;
+    }
 
     // 2) Dodge activation. The edge only "takes" if cooldown is ready
     //    AND we're not already mid-dodge. Cooldown prevents spam; the
     //    in-flight check prevents re-triggering on back-to-back press.
     if (dodgeEdge && self.dodgeCooldownMs <= 0 && self.dodgeTimerMs <= 0) {
+      // eslint-disable-next-line no-console
+      console.log('[action] dodge');
       // Latch the dodge direction from the current move input if the
       // stick is deflected; otherwise dodge backward (away from aim).
       // Back-dodge is a common brawler tech for creating space.
@@ -329,6 +375,16 @@ export function createCharacterController(deps: ControllerDeps): CharacterContro
     self.pendingBasicAttackEdge = false;
     return e;
   };
+  const consumeAbilityEdge = (): boolean => {
+    const e = self.pendingAbilityEdge;
+    self.pendingAbilityEdge = false;
+    return e;
+  };
+  const consumeUltimateEdge = (): boolean => {
+    const e = self.pendingUltimateEdge;
+    self.pendingUltimateEdge = false;
+    return e;
+  };
 
   const getPlanarSpeed = (): number => Math.hypot(self.velX, self.velZ);
 
@@ -342,6 +398,8 @@ export function createCharacterController(deps: ControllerDeps): CharacterContro
     isDodging,
     consumeDodgeEdge,
     consumeBasicAttackEdge,
+    consumeAbilityEdge,
+    consumeUltimateEdge,
     getPlanarSpeed,
     dispose,
   };
