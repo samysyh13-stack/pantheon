@@ -31,7 +31,8 @@
 
 import { Canvas } from '@react-three/fiber';
 import type { GLProps, Renderer } from '@react-three/fiber';
-import { Suspense, useMemo } from 'react';
+import { Physics } from '@react-three/rapier';
+import { Suspense, useMemo, type ReactNode } from 'react';
 import { NoToneMapping, WebGLRenderer } from 'three';
 import type { WebGLRendererParameters } from 'three';
 
@@ -44,18 +45,17 @@ import { GameEnvironment } from './environment';
 
 interface Props {
   preset: GraphicsPreset;
+  /**
+   * Scene content rendered inside the <Physics> tree. When absent, a
+   * minimal demo scene (cube + ground) is shown instead — useful as a
+   * menu backdrop and for Phase 1 smoke tests.
+   */
+  children?: ReactNode;
 }
 
-function DemoScene({ preset }: { preset: PresetConfig }) {
+function DemoScene() {
   return (
     <>
-      <directionalLight
-        position={[8, 12, 4]}
-        intensity={1.1}
-        castShadow={preset.shadows}
-        shadow-mapSize-width={preset.shadowMapSize}
-        shadow-mapSize-height={preset.shadowMapSize}
-      />
       <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color="#d4a24a" roughness={0.5} metalness={0.1} />
@@ -113,7 +113,7 @@ async function importWebGPURenderer(
   return renderer as unknown as Renderer;
 }
 
-export function GameCanvas({ preset }: Props) {
+export function GameCanvas({ preset, children }: Props) {
   const accessibility = useAppStore((s) => s.settings.accessibility);
   const rendererPref = useAppStore((s) => s.settings.renderer);
 
@@ -155,8 +155,15 @@ export function GameCanvas({ preset }: Props) {
       <Suspense fallback={null}>
         <color attach="background" args={['#0f1218']} />
         <ambientLight intensity={0.5} />
+        <directionalLight
+          position={[8, 12, 4]}
+          intensity={1.1}
+          castShadow={p.shadows}
+          shadow-mapSize-width={p.shadowMapSize}
+          shadow-mapSize-height={p.shadowMapSize}
+        />
         <GameEnvironment preset={p} />
-        <DemoScene preset={p} />
+        <Physics timeStep={1 / 60}>{children || <DemoScene />}</Physics>
       </Suspense>
       {useComposer && <EffectStack preset={p} accessibility={accessibility} />}
     </Canvas>
