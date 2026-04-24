@@ -33,7 +33,7 @@ import { Canvas } from '@react-three/fiber';
 import type { GLProps, Renderer } from '@react-three/fiber';
 import { Physics } from '@react-three/rapier';
 import { Suspense, useMemo, type ReactNode } from 'react';
-import { NoToneMapping, WebGLRenderer } from 'three';
+import { NoToneMapping, PCFShadowMap, WebGLRenderer } from 'three';
 import type { WebGLRendererParameters } from 'three';
 
 import type { GraphicsPreset } from '../state/store';
@@ -150,6 +150,10 @@ export function GameCanvas({ preset, children }: Props) {
         // Compositor owns tone mapping when enabled; either way ensure the
         // renderer isn't double-applying it.
         state.gl.toneMapping = NoToneMapping;
+        // Three r184 deprecated PCFSoftShadowMap (Phase 1 Fix 5 follow-up).
+        // Pin to PCFShadowMap explicitly so we don't eat a console warning
+        // on first render and stay forward-compatible with r185+.
+        state.gl.shadowMap.type = PCFShadowMap;
       }}
     >
       <Suspense fallback={null}>
