@@ -1,4 +1,18 @@
+// PANTHÉON preset table — authoritative per-tier rendering configuration.
+//
+// NOTE (T-002 RS): the preset rows below are the single source of truth for
+// the rendering pipeline. `src/rendering/postprocessing/composer.tsx` and
+// `src/rendering/Canvas.tsx` read from here to assemble the effect stack and
+// renderer configuration. Changes propagate without touching those files.
+//
+// The per-tier values map one-to-one onto /docs/ARCHITECTURE.md §9's effect
+// composition table. Keep the table in sync with the docs; any numeric
+// change that affects gameplay perception (outline thickness, bloom on/off,
+// SSAO) should land via an ADR if it alters the agreed visual contract.
+
 import type { GraphicsPreset } from '../../state/store';
+
+export type Tonemap = 'aces' | 'linear';
 
 export interface PresetConfig {
   antialias: boolean;
@@ -11,6 +25,11 @@ export interface PresetConfig {
   particleDensity: number;
   dpr: [number, number];
   targetFps: 30 | 60;
+  // T-002 RS additions — required by the composer to honor §9:
+  tonemap: Tonemap;
+  // Environment tier: 'gradient' = procedural 2-color hemisphere (no HDRI);
+  // 'hdri' = drei <Environment preset="warehouse"> neutral overcast (ADR-0012).
+  environment: 'gradient' | 'hdri';
 }
 
 export const PRESETS: Record<Exclude<GraphicsPreset, 'auto'>, PresetConfig> = {
@@ -25,6 +44,8 @@ export const PRESETS: Record<Exclude<GraphicsPreset, 'auto'>, PresetConfig> = {
     particleDensity: 1.0,
     dpr: [1, 2],
     targetFps: 60,
+    tonemap: 'aces',
+    environment: 'hdri',
   },
   high: {
     antialias: true,
@@ -37,6 +58,8 @@ export const PRESETS: Record<Exclude<GraphicsPreset, 'auto'>, PresetConfig> = {
     particleDensity: 0.85,
     dpr: [1, 2],
     targetFps: 60,
+    tonemap: 'aces',
+    environment: 'hdri',
   },
   medium: {
     antialias: true,
@@ -49,6 +72,8 @@ export const PRESETS: Record<Exclude<GraphicsPreset, 'auto'>, PresetConfig> = {
     particleDensity: 0.6,
     dpr: [1, 1.5],
     targetFps: 30,
+    tonemap: 'aces',
+    environment: 'hdri',
   },
   low: {
     antialias: false,
@@ -61,6 +86,8 @@ export const PRESETS: Record<Exclude<GraphicsPreset, 'auto'>, PresetConfig> = {
     particleDensity: 0.35,
     dpr: [1, 1.25],
     targetFps: 30,
+    tonemap: 'linear',
+    environment: 'gradient',
   },
   battery: {
     antialias: false,
@@ -73,6 +100,8 @@ export const PRESETS: Record<Exclude<GraphicsPreset, 'auto'>, PresetConfig> = {
     particleDensity: 0.25,
     dpr: [1, 1],
     targetFps: 30,
+    tonemap: 'linear',
+    environment: 'gradient',
   },
 };
 
