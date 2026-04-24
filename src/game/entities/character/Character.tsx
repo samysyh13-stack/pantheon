@@ -532,6 +532,14 @@ export function Character(props: CharacterProps) {
     } else if (input.aimMagnitude >= AIM_FACE_THRESHOLD) {
       targetYaw = Math.atan2(input.aimX, input.aimY);
     }
+    // KayKit Rogue_Hooded is authored with the character's visible front
+    // facing +Z in its local axes (verified from live playtest: pressing W
+    // moved the character into -Z but he appeared to face +Z — back to
+    // camera inverted). Three.js default-forward convention is -Z, so we
+    // flip the computed yaw by π so the mesh faces the movement/aim
+    // direction rather than the opposite. Both move and aim branches get
+    // the same flip since they share the same mesh orientation base.
+    if (targetYaw !== null) targetYaw += Math.PI;
     const mesh = meshRef.current;
     if (mesh && targetYaw !== null) {
       // Shortest-arc wrap: keep the delta in [-π, π] so we don't spin
