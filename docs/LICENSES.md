@@ -45,9 +45,20 @@
 | @sentry/browser | MIT (optional runtime) |
 | plausible-tracker | MIT (optional runtime) |
 
-## 3. 3D Models (seeded — no models added yet)
+## 3. 3D Models
 
-Pending: v1 characters (Anansi, Brigid, Susanoo) and Sacred Grove props.
+### Shipped v1 assets
+
+| File | Source | License | Date acquired | Use |
+|---|---|---|---|---|
+| `public/models/anansi/Anansi.glb` | [KayKit Character Pack: Adventurers 1.0](https://kaylousberg.itch.io/kaykit-adventurers) — "Rogue_Hooded" (via GitHub mirror [KayKit-Character-Pack-Adventures-1.0](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0)) by Kay Lousberg | CC0 1.0 Universal (license file preserved at `public/models/anansi/KAYKIT-LICENSE.txt`) | 2026-04-24 | Anansi placeholder mesh — hooded trickster silhouette reads for the god identity while VFX carry the spider-weaver symbolism (ADR-0013) |
+| `public/models/anansi/Anansi-Rogue-variant.glb` | Same KayKit pack — "Rogue" (un-hooded) | CC0 1.0 Universal | 2026-04-24 | Silhouette A/B variant — kept for tutorial/god-select comparison; may be removed in Phase 4 polish if never used |
+
+### Pending (Phase 3+)
+
+- Brigid / Susanoo characters (deferred — Path C locks the v1 roster to Anansi)
+
+### Planned sources and license requirements
 
 Planned sources and license requirements:
 - **Meshy AI** — https://www.meshy.ai — **paid tier with commercial rights required**; user to confirm tier before Phase 2
