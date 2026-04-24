@@ -25,6 +25,14 @@ test.describe('Phase 2 smoke — menu → match loop', () => {
 
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 15_000 });
+    // First-visit tutorial overlay (Phase 3 UX polish); dismiss before
+    // exercising the menu flow. Safe no-op on subsequent runs if the
+    // Dexie-persisted hasSeenTutorial survived (Playwright contexts start
+    // fresh by default, so the overlay is shown every test run).
+    const gotIt = page.getByRole('button', { name: /Got it/i });
+    if (await gotIt.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await gotIt.click();
+    }
 
     // Main menu: title + buttons
     await expect(page.getByRole('heading', { name: 'PANTHÉON' })).toBeVisible();
@@ -70,6 +78,14 @@ test.describe('Phase 2 smoke — menu → match loop', () => {
   test('HUD elements all present during match', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 15_000 });
+    // First-visit tutorial overlay (Phase 3 UX polish); dismiss before
+    // exercising the menu flow. Safe no-op on subsequent runs if the
+    // Dexie-persisted hasSeenTutorial survived (Playwright contexts start
+    // fresh by default, so the overlay is shown every test run).
+    const gotIt = page.getByRole('button', { name: /Got it/i });
+    if (await gotIt.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await gotIt.click();
+    }
     await page.getByRole('button', { name: 'Play' }).click();
     await page.getByRole('button', { name: /Start Match/i }).click();
     await page.waitForTimeout(1_500); // auto-advance + HUD mount
@@ -92,6 +108,14 @@ test.describe('Phase 2 smoke — menu → match loop', () => {
   }) => {
     await page.goto('/');
     await page.waitForSelector('canvas', { timeout: 15_000 });
+    // First-visit tutorial overlay (Phase 3 UX polish); dismiss before
+    // exercising the menu flow. Safe no-op on subsequent runs if the
+    // Dexie-persisted hasSeenTutorial survived (Playwright contexts start
+    // fresh by default, so the overlay is shown every test run).
+    const gotIt = page.getByRole('button', { name: /Got it/i });
+    if (await gotIt.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await gotIt.click();
+    }
     await page.getByRole('button', { name: 'Settings' }).click();
     // Graphics tab is default
     await expect(page.getByRole('tab', { name: 'Graphics' })).toBeVisible();

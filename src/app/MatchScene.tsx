@@ -143,6 +143,10 @@ export function MatchScene() {
   const nextProjectileId = useRef(1);
   const [projectiles, setProjectiles] = useState<ProjectileRec[]>([]);
   const setScreen = useAppStore((s) => s.setScreen);
+  const setLastMatchResult = useAppStore((s) => s.setLastMatchResult);
+  // Track running damage totals for the Results screen. Updated on each hit
+  // (via hitProjectile) and at match-end (via useEffect → setLastMatchResult).
+  const damageRef = useRef({ dealt: 0, taken: 0, kills: 0, startMs: 0 });
 
   useEffect(() => {
     const mgr = createInputManager({ playerCount: 1 });
@@ -155,6 +159,7 @@ export function MatchScene() {
     setInputMgr(mgr);
     setBot(b);
     matchCtl.start();
+    damageRef.current = { dealt: 0, taken: 0, kills: 0, startMs: performance.now() };
     // Music: flip to combat layer on match mount; restored to menu on unmount.
     try {
       void setMusicLayer('combat', 500);
@@ -172,15 +177,30 @@ export function MatchScene() {
     };
   }, [matchCtl]);
 
-  // When the match state machine transitions to match-end, flip to results.
+  // When the match state machine transitions to match-end, commit the
+  // result to the store and flip the screen to 'results'. The Results
+  // component reads lastMatchResult; rematch button routes back to
+  // 'loading' which auto-advances to 'match' (App.tsx LOADING hook).
   useEffect(() => {
     const check = window.setInterval(() => {
-      if (matchCtl.getPhase() === 'match-end') {
-        setScreen('results');
-      }
+      if (matchCtl.getPhase() !== 'match-end') return;
+      const winner = matchCtl.getMatchEndWinner();
+      const [s0, s1] = matchCtl.getScore();
+      const d = damageRef.current;
+      setLastMatchResult({
+        outcome: winner === 0 ? 'victory' : 'defeat',
+        damageDealt: d.dealt,
+        damageTaken: d.taken,
+        durationSeconds: Math.round((performance.now() - d.startMs) / 1000),
+        kills: d.kills,
+      });
+      void s0;
+      void s1;
+      setScreen('results');
+      window.clearInterval(check);
     }, 500);
     return () => window.clearInterval(check);
-  }, [matchCtl, setScreen]);
+  }, [matchCtl, setScreen, setLastMatchResult]);
 
   const spawnProjectile = (
     owner: 0 | 1,
@@ -209,6 +229,14 @@ export function MatchScene() {
     const landed = target.applyHit(SILKEN_DART_DAMAGE);
     if (!landed) return; // dodge i-frames ate it
     matchCtl.applyDamage(targetIndex, SILKEN_DART_DAMAGE);
+    // Track for the Results screen. Player = index 0; dealing damage to 1
+    // is outgoing (dealt); receiving from 1 is incoming (taken).
+    if (rec.ownerIndex === 0) damageRef.current.dealt += SILKEN_DART_DAMAGE;
+    else damageRef.current.taken += SILKEN_DART_DAMAGE;
+    // Track kill on HP floor.
+    if (matchCtl.getHp(targetIndex) === 0 && rec.ownerIndex === 0) {
+      damageRef.current.kills += 1;
+    }
     try {
       void playSfx('hit', { volume: 1.0 });
     } catch {

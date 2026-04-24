@@ -54,6 +54,16 @@ export interface Settings {
 
 export type MatchScreen = 'menu' | 'god-select' | 'loading' | 'match' | 'results';
 
+export type MatchOutcome = 'victory' | 'defeat';
+
+export interface LastMatchResult {
+  outcome: MatchOutcome;
+  damageDealt: number;
+  damageTaken: number;
+  durationSeconds: number;
+  kills: number;
+}
+
 export interface MatchSlice {
   screen: MatchScreen;
   // Display-only HUD state. Simulation owns authoritative values via the
@@ -67,6 +77,10 @@ export interface MatchSlice {
   playerAbilityMaxCdMs: number;
   scoreP0: number;
   scoreP1: number;
+  /** Populated by MatchScene on match-end; Results screen reads from here. */
+  lastMatchResult: LastMatchResult | null;
+  /** First-visit tutorial overlay flag. Persisted via zustand+dexie. */
+  hasSeenTutorial: boolean;
 }
 
 export interface AppState {
@@ -81,6 +95,8 @@ export interface AppState {
   setGamepadBinding: (action: InputAction, buttonIndex: number) => void;
   setScreen: (s: MatchScreen) => void;
   setMatchHudState: (patch: Partial<MatchSlice>) => void;
+  setLastMatchResult: (r: LastMatchResult | null) => void;
+  markTutorialSeen: () => void;
   resetMatch: () => void;
 }
 
@@ -179,6 +195,8 @@ export const useAppStore = create<AppState>()(
         playerAbilityMaxCdMs: 8000, // Anansi Mirror Thread 8 s CD
         scoreP0: 0,
         scoreP1: 0,
+        lastMatchResult: null,
+        hasSeenTutorial: false,
       },
       setGraphicsPreset: (p) =>
         set((s) => ({ settings: { ...s.settings, graphicsPreset: p } })),
@@ -221,6 +239,9 @@ export const useAppStore = create<AppState>()(
         })),
       setScreen: (screen) => set((s) => ({ match: { ...s.match, screen } })),
       setMatchHudState: (patch) => set((s) => ({ match: { ...s.match, ...patch } })),
+      setLastMatchResult: (lastMatchResult) =>
+        set((s) => ({ match: { ...s.match, lastMatchResult } })),
+      markTutorialSeen: () => set((s) => ({ match: { ...s.match, hasSeenTutorial: true } })),
       resetMatch: () =>
         set((s) => ({
           match: {
@@ -233,6 +254,8 @@ export const useAppStore = create<AppState>()(
             playerAbilityMaxCdMs: 8000,
             scoreP0: 0,
             scoreP1: 0,
+            lastMatchResult: s.match.lastMatchResult,
+            hasSeenTutorial: s.match.hasSeenTutorial,
           },
         })),
     }),

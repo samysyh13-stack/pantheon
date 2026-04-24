@@ -19,24 +19,50 @@ import { useAppStore } from '../state/store';
 import { MainMenu } from './menus/MainMenu';
 import { GodSelect } from './menus/GodSelect';
 import { Results } from './menus/Results';
+import { TutorialOverlay } from './menus/TutorialOverlay';
 
 export function Screens() {
   const screen = useAppStore((s) => s.match.screen);
+  const lastMatchResult = useAppStore((s) => s.match.lastMatchResult);
 
+  let content: React.ReactNode = null;
   switch (screen) {
     case 'menu':
-      return <MainMenu />;
+      content = <MainMenu />;
+      break;
     case 'god-select':
-      return <GodSelect />;
+      content = <GodSelect />;
+      break;
     case 'loading':
-      return <LoadingScreen />;
+      content = <LoadingScreen />;
+      break;
     case 'match':
-      return null;
+      content = null;
+      break;
     case 'results':
-      return <Results />;
-    default:
-      return null;
+      content = lastMatchResult ? (
+        <Results
+          outcome={lastMatchResult.outcome}
+          stats={{
+            damageDealt: lastMatchResult.damageDealt,
+            damageTaken: lastMatchResult.damageTaken,
+            durationSeconds: lastMatchResult.durationSeconds,
+            kills: lastMatchResult.kills,
+          }}
+        />
+      ) : (
+        <Results />
+      );
+      break;
   }
+
+  return (
+    <>
+      {content}
+      {/* TutorialOverlay auto-shows on first visit (gated by hasSeenTutorial) */}
+      <TutorialOverlay />
+    </>
+  );
 }
 
 function LoadingScreen() {
