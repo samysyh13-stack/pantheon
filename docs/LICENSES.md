@@ -80,13 +80,28 @@ Every downloaded model MUST include an entry:
 | AmbientCG | CC0 | https://ambientcg.com |
 | Textures.com | mixed (verify per asset) | https://www.textures.com |
 
-## 5. Audio Sources (seeded)
+## 5. Audio Sources
+
+### Shipped v1 assets (all CC0, zero attribution required)
+
+| File | Original title | Author | Source page | License | Date acquired | Use |
+|---|---|---|---|---|---|---|
+| `public/audio/music-menu-ambient.ogg` | Shrine | yd | [OpenGameArt](https://opengameart.org/content/shrine) | CC0 | 2026-04-24 | Menu ambient loop (DESIGN §11 exploration layer) |
+| `public/audio/music-combat.ogg` | Fast Fight / Battle Music | Xythe | [OpenGameArt](https://opengameart.org/content/fast-fight-battle-music) | CC0 | 2026-04-24 | Combat layer crossfade (DESIGN §11 combat layer) |
+| `public/audio/sfx-ui-click.wav` | Wooden Click | BenjaminNelan | [Freesound #321083](https://freesound.org/s/321083/) | CC0 | 2026-04-24 | UI button click |
+| `public/audio/sfx-hit-impact.ogg` | Hit Impact | MadPanCake | [Freesound #660770](https://freesound.org/s/660770/) | CC0 | 2026-04-24 | Combat hit-confirm one-shot (DESIGN §4) |
+| `public/audio/sfx-anansi-whoosh.flac` | Whoosh | qubodup | [Freesound #60013](https://freesound.org/s/60013/) | CC0 | 2026-04-24 | Silken Dart release |
+| `public/audio/sfx-anansi-whisper.wav` | SFX_Spell_WhisperedShort-04 | Wavewire | [Freesound #837459](https://freesound.org/s/837459/) | CC0 | 2026-04-24 | Mirror Thread cast whisper (trim to 400–600 ms at build time) |
+
+### Planned / additional sources (for future assets)
 
 | Source | License guidance | URL |
 |---|---|---|
 | Freesound.org | per-asset; filter to **CC0** and **CC-BY** | https://freesound.org |
 | Pixabay Sound | Pixabay license (free commercial) | https://pixabay.com/sound-effects |
+| OpenGameArt Audio | per-track; prefer **CC0** | https://opengameart.org/art-search?field_art_type_tid%5B%5D=13 |
 | Free Music Archive | per-track; prefer **CC0** / **CC-BY** | https://freemusicarchive.org |
+| Kenney Audio Packs | **CC0** | https://kenney.nl/assets?q=audio |
 | Zapsplat | royalty-free with account | https://www.zapsplat.com |
 | **Suno.ai / Udio** | **commercial-rights tier only**; user to confirm output license | https://suno.ai https://www.udio.com |
 | ElevenLabs (voice lines, v1 optional) | per-account commercial tier | https://elevenlabs.io |
