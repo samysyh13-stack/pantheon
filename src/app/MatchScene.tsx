@@ -1,28 +1,14 @@
-// Match scene — Phase 2 orchestrator integration.
+// Match scene — Phase 3 integration.
 //
-// Assembles the full vertical slice: player Anansi (driven by the human
-// InputManager), bot Anansi (driven by T-105's createAnansiBot), Sacred
-// Grove arena, and a tracking camera following the player.
+// Assembles: player Anansi + bot Anansi (T-105 AI), Sacred Grove arena,
+// tracking camera, combat MVP (projectiles + hit detection + HP apply),
+// match state machine (rounds / scoring / win-loss), music layer transition.
 //
-// Lifecycle:
-//   - Creates InputManager + AnansiBot on mount; disposes manager on
-//     unmount so its rAF loop doesn't leak across match sessions.
-//   - Each frame: compute BotWorldSnapshot from both Anansi handles'
-//     positions (with simple finite-difference velocity for opponent
-//     lead-prediction on Hard), feed bot.update(snap). The bot's
-//     snapshot(playerIndex) is consumed by the bot Anansi's Character
-//     component on its own useFrame tick.
-//
-// Deferred to Phase 3:
-//   - Difficulty selection UI (hardcoded 'normal' in Phase 2 per default)
-//   - Real HP + ult-charge propagation from combat layer (placeholder 320
-//     and 0 used here). The bot's HP-ratio kite/disengage gates behave as
-//     if both sides are full HP until combat lands — acceptable for the
-//     Phase 2 gate because movement + positioning dominate behavior at
-//     full HP.
-//   - Score + match state machine driving timerMs, scoreP0, scoreP1.
+// Determinism preserved throughout (ADR-0006): bot.update and
+// matchController.tick are both pure over (snap, tick) and (dt) inputs;
+// projectile motion uses the same dt supplied by useFrame.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Vector3 } from 'three';
 
@@ -30,6 +16,7 @@ import { Anansi } from '../game/gods/anansi/Anansi';
 import { SacredGrove, SPAWN_POINTS } from '../game/arenas/sacredGrove';
 import { TrackingCamera } from '../game/entities/character/Camera';
 import type { CharacterHandle } from '../game/entities/character/Character';
+import type { CharacterState } from '../game/entities/character/types';
 import {
   create as createInputManager,
   type InputManager,
@@ -37,24 +24,43 @@ import {
 import { createAnansiBot } from '../game/systems/ai/gods/anansiBot';
 import type { BotInputSource, BotWorldSnapshot } from '../game/systems/ai/types';
 import { TICK_DT } from '../game/engine/loop';
+import { createMatchController, type MatchController } from '../game/match/StateMachine';
+import { Projectile } from '../game/systems/combat';
+import { playSfx, setMusicLayer } from '../game/systems/audio';
+import { useAppStore } from '../state/store';
 
-// Constant per-bot tuning for Phase 2. Difficulty selector is T-106+ in Phase 3.
 const BOT_DIFFICULTY = 'normal' as const;
-const BOT_SEED = 0xa0a051; // Anansi trickster seed (arbitrary); deterministic replay key
+const BOT_SEED = 0xa0a051;
+
+const SILKEN_DART_SPEED = 25; // m/s per DESIGN §6.1
+const SILKEN_DART_LIFETIME = 0.4; // s — range 10 m / speed 25 = 0.4
+const SILKEN_DART_DAMAGE = 80;
+
+interface ProjectileRec {
+  id: number;
+  origin: [number, number, number];
+  direction: [number, number, number];
+  ownerIndex: 0 | 1;
+}
 
 function BotTicker({
   bot,
   playerRef,
   botRef,
+  matchCtl,
+  spawnProjectile,
 }: {
   bot: BotInputSource;
   playerRef: React.RefObject<CharacterHandle | null>;
   botRef: React.RefObject<CharacterHandle | null>;
+  matchCtl: MatchController;
+  spawnProjectile: (owner: 0 | 1, origin: [number, number, number], dir: [number, number, number]) => void;
 }) {
   const tickRef = useRef(0);
   const prevPlayerPos = useRef(new Vector3());
-  const prevBotPos = useRef(new Vector3());
   const playerVel = useRef(new Vector3());
+  const prevPlayerState = useRef<CharacterState>('idle');
+  const prevBotState = useRef<CharacterState>('idle');
 
   useFrame((_state, dt) => {
     const pHandle = playerRef.current;
@@ -64,31 +70,29 @@ function BotTicker({
     const pPos = pHandle.getWorldPosition();
     const bPos = bHandle.getWorldPosition();
 
-    // Finite-difference player velocity for Hard's prediction lead. Clamp
-    // dt to avoid spike-velocity on first frame when prev is (0,0,0).
     const safeDt = dt > 1e-4 ? dt : TICK_DT;
     if (tickRef.current > 0) {
       playerVel.current.copy(pPos).sub(prevPlayerPos.current).divideScalar(safeDt);
     }
     prevPlayerPos.current.copy(pPos);
-    prevBotPos.current.copy(bPos);
 
     tickRef.current += 1;
 
-    // BotWorldSnapshot uses Vec2 aliasing XZ as { x, y }: x → world X,
-    // y → world Z (per types.ts doc comment).
+    // Bot world snapshot with real-ish HP fed from the match controller.
+    const playerHp = matchCtl.getHp(0);
+    const botHp = matchCtl.getHp(1);
     const snap: BotWorldSnapshot = {
       self: {
         pos: { x: bPos.x, y: bPos.z },
-        hp: 320, // TODO(Phase 3): real HP from combat layer
+        hp: botHp,
         maxHp: 320,
-        abilityCdMs: 0, // TODO(Phase 3): real cooldown tracking
+        abilityCdMs: 0,
         ultCharge: 0,
         isDodging: bHandle.getState() === 'dodging',
       },
       opponent: {
         pos: { x: pPos.x, y: pPos.z },
-        hp: 320,
+        hp: playerHp,
         maxHp: 320,
         lastKnownVelocity: { x: playerVel.current.x, y: playerVel.current.z },
       },
@@ -96,20 +100,49 @@ function BotTicker({
       dt: safeDt,
     };
     bot.update(snap);
+
+    // Match state machine tick — owns round timer + win/loss.
+    matchCtl.tick(safeDt);
+
+    // Projectile spawn: detect FSM transition into 'attacking' for each side.
+    const pState = pHandle.getState();
+    const bState = bHandle.getState();
+    if (pState === 'attacking' && prevPlayerState.current !== 'attacking') {
+      const dir = directionTo(pPos, bPos);
+      spawnProjectile(0, [pPos.x, 1.2, pPos.z], dir);
+    }
+    if (bState === 'attacking' && prevBotState.current !== 'attacking') {
+      const dir = directionTo(bPos, pPos);
+      spawnProjectile(1, [bPos.x, 1.2, bPos.z], dir);
+    }
+    prevPlayerState.current = pState;
+    prevBotState.current = bState;
   });
 
   return null;
+}
+
+function directionTo(
+  from: Vector3,
+  to: Vector3,
+): [number, number, number] {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const mag = Math.hypot(dx, dz);
+  if (mag < 1e-4) return [0, 0, 1];
+  return [dx / mag, 0, dz / mag];
 }
 
 export function MatchScene() {
   const playerHandleRef = useRef<CharacterHandle | null>(null);
   const botHandleRef = useRef<CharacterHandle | null>(null);
 
-  // Input manager + bot created in an effect (React 19 Strict Mode double-
-  // invokes useMemo callbacks; effect cleanup is the safe idiom for
-  // side-effectful resources like the manager's rAF loop).
   const [inputMgr, setInputMgr] = useState<InputManager | null>(null);
   const [bot, setBot] = useState<BotInputSource | null>(null);
+  const matchCtl = useMemo(() => createMatchController(), []);
+  const nextProjectileId = useRef(1);
+  const [projectiles, setProjectiles] = useState<ProjectileRec[]>([]);
+  const setScreen = useAppStore((s) => s.setScreen);
 
   useEffect(() => {
     const mgr = createInputManager({ playerCount: 1 });
@@ -121,10 +154,67 @@ export function MatchScene() {
     });
     setInputMgr(mgr);
     setBot(b);
+    matchCtl.start();
+    // Music: flip to combat layer on match mount; restored to menu on unmount.
+    try {
+      void setMusicLayer('combat', 500);
+    } catch {
+      /* audio may be blocked until user gesture — harmless */
+    }
     return () => {
       mgr.dispose();
+      matchCtl.reset();
+      try {
+        void setMusicLayer('menu', 500);
+      } catch {
+        /* ignore */
+      }
     };
-  }, []);
+  }, [matchCtl]);
+
+  // When the match state machine transitions to match-end, flip to results.
+  useEffect(() => {
+    const check = window.setInterval(() => {
+      if (matchCtl.getPhase() === 'match-end') {
+        setScreen('results');
+      }
+    }, 500);
+    return () => window.clearInterval(check);
+  }, [matchCtl, setScreen]);
+
+  const spawnProjectile = (
+    owner: 0 | 1,
+    origin: [number, number, number],
+    direction: [number, number, number],
+  ) => {
+    const id = nextProjectileId.current++;
+    setProjectiles((cur) => [...cur, { id, origin, direction, ownerIndex: owner }]);
+    try {
+      void playSfx('whoosh', { volume: 0.9 });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const expireProjectile = (id: number) => {
+    setProjectiles((cur) => cur.filter((p) => p.id !== id));
+  };
+
+  const hitProjectile = (rec: ProjectileRec) => {
+    expireProjectile(rec.id);
+    const targetIndex: 0 | 1 = rec.ownerIndex === 0 ? 1 : 0;
+    const targetRef = targetIndex === 0 ? playerHandleRef : botHandleRef;
+    const target = targetRef.current;
+    if (!target) return;
+    const landed = target.applyHit(SILKEN_DART_DAMAGE);
+    if (!landed) return; // dodge i-frames ate it
+    matchCtl.applyDamage(targetIndex, SILKEN_DART_DAMAGE);
+    try {
+      void playSfx('hit', { volume: 1.0 });
+    } catch {
+      /* ignore */
+    }
+  };
 
   if (!inputMgr || !bot) return null;
 
@@ -143,13 +233,33 @@ export function MatchScene() {
         position={[SPAWN_POINTS.p1.x, SPAWN_POINTS.p1.y, SPAWN_POINTS.p1.z]}
         playerIndex={1}
         inputSource={bot}
-        seed={0xb07707} // mirror seed so cosmetic rng (if any) diverges from player
+        seed={0xb07707}
         onHandleReady={(h) => {
           botHandleRef.current = h;
         }}
       />
-      <BotTicker bot={bot} playerRef={playerHandleRef} botRef={botHandleRef} />
+      <BotTicker
+        bot={bot}
+        playerRef={playerHandleRef}
+        botRef={botHandleRef}
+        matchCtl={matchCtl}
+        spawnProjectile={spawnProjectile}
+      />
       <TrackingCamera target={playerHandleRef} />
+      {projectiles.map((p) => (
+        <Projectile
+          key={p.id}
+          origin={p.origin}
+          direction={p.direction}
+          speed={SILKEN_DART_SPEED}
+          lifetimeSec={SILKEN_DART_LIFETIME}
+          color="#d4a24a"
+          emissiveColor="#ffd48a"
+          targetRef={p.ownerIndex === 0 ? botHandleRef : playerHandleRef}
+          onExpire={() => expireProjectile(p.id)}
+          onHit={() => hitProjectile(p)}
+        />
+      ))}
     </>
   );
 }
