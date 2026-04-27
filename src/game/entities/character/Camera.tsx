@@ -35,14 +35,35 @@ import { PerspectiveCamera, Vector3 } from 'three';
 import { damp } from '../../../utils/math';
 import type { CharacterHandle } from './Character';
 
-/** World-space camera offset from the target (metres). +Y = up, +Z = back. */
-export const CAMERA_OFFSET: [number, number, number] = [0, 10, 14];
+/**
+ * World-space camera offset from the target (metres). +Y = up, +Z = back.
+ *
+ * v1.0.1 Brawl-Stars-feel pass: previous offset (0, 10, 14) gave ~35° pitch
+ * which read as third-person Diablo, not top-down brawler. Bumped to
+ * (0, 16, 11) → pitch atan2(16, 11) ≈ 55° — closer to BS's 55–65° baseline
+ * (per docs/research/BRAWL-STARS-COMPARISON.md). FOV narrowed in tandem so
+ * the arena reads more orthographically (less foreground-bloat on the
+ * player Anansi).
+ */
+export const CAMERA_OFFSET: [number, number, number] = [0, 16, 11];
 /** Look-at offset from the character's origin (we aim slightly above feet). */
-export const CAMERA_LOOK_AT_OFFSET: [number, number, number] = [0, 1.0, 0];
-/** Damping lambda for position + look-at interpolation. */
-export const CAMERA_LAMBDA = 6.0;
-/** Perspective FOV in degrees. Matches Canvas.tsx's default. */
-export const CAMERA_FOV_DEG = 45;
+export const CAMERA_LOOK_AT_OFFSET: [number, number, number] = [0, 0.8, 0];
+/**
+ * Damping lambda for position + look-at interpolation.
+ *
+ * Lowered from 6.0 → 4.0 so the camera lags the player slightly when they
+ * dash — gives the BS "the camera is filming the action, not glued to the
+ * brawler" feel.
+ */
+export const CAMERA_LAMBDA = 4.0;
+/**
+ * Perspective FOV in degrees.
+ *
+ * Lowered from 45° → 35° (telephoto) so the near-far disparity is reduced.
+ * Brawl Stars uses ~30–35° for the near-orthographic "everything at one
+ * scale" read.
+ */
+export const CAMERA_FOV_DEG = 35;
 /** Near / far clipping planes. */
 export const CAMERA_NEAR = 0.1;
 export const CAMERA_FAR = 200;

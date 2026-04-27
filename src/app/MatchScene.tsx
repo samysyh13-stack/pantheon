@@ -28,6 +28,8 @@ import { createMatchController, type MatchController } from '../game/match/State
 import { Projectile } from '../game/systems/combat';
 import { playSfx, setMusicLayer } from '../game/systems/audio';
 import { useAppStore } from '../state/store';
+import { CharacterHpBillboard } from '../ui/hud/CharacterHpBillboard';
+import { DamageNumber } from '../ui/hud/DamageNumber';
 
 const BOT_DIFFICULTY = 'normal' as const;
 const BOT_SEED = 0xa0a051;
@@ -41,6 +43,13 @@ interface ProjectileRec {
   origin: [number, number, number];
   direction: [number, number, number];
   ownerIndex: 0 | 1;
+}
+
+interface DamageFloater {
+  id: number;
+  origin: [number, number, number];
+  value: number;
+  flavor: 'incoming' | 'outgoing';
 }
 
 function BotTicker({
@@ -141,7 +150,9 @@ export function MatchScene() {
   const [bot, setBot] = useState<BotInputSource | null>(null);
   const matchCtl = useMemo(() => createMatchController(), []);
   const nextProjectileId = useRef(1);
+  const nextFloaterId = useRef(1);
   const [projectiles, setProjectiles] = useState<ProjectileRec[]>([]);
+  const [damageFloaters, setDamageFloaters] = useState<DamageFloater[]>([]);
   const setScreen = useAppStore((s) => s.setScreen);
   const setLastMatchResult = useAppStore((s) => s.setLastMatchResult);
   // Track running damage totals for the Results screen. Updated on each hit
@@ -237,11 +248,25 @@ export function MatchScene() {
     if (matchCtl.getHp(targetIndex) === 0 && rec.ownerIndex === 0) {
       damageRef.current.kills += 1;
     }
+    // Spawn a floating damage number at the impacted character's chest.
+    // Brawl-Stars-feel pass v1.0.1.
+    const hitPos = target.getWorldPosition();
+    const floater: DamageFloater = {
+      id: nextFloaterId.current++,
+      origin: [hitPos.x, hitPos.y + 1.4, hitPos.z],
+      value: SILKEN_DART_DAMAGE,
+      flavor: targetIndex === 0 ? 'incoming' : 'outgoing',
+    };
+    setDamageFloaters((cur) => [...cur, floater]);
     try {
       void playSfx('hit', { volume: 1.0 });
     } catch {
       /* ignore */
     }
+  };
+
+  const expireFloater = (id: number) => {
+    setDamageFloaters((cur) => cur.filter((f) => f.id !== id));
   };
 
   if (!inputMgr || !bot) return null;
@@ -274,6 +299,27 @@ export function MatchScene() {
         spawnProjectile={spawnProjectile}
       />
       <TrackingCamera target={playerHandleRef} />
+      {/* Floating HP bars above both characters (Brawl-Stars feel). */}
+      <CharacterHpBillboard
+        target={playerHandleRef}
+        getHp={() => matchCtl.getHp(0)}
+        maxHp={320}
+      />
+      <CharacterHpBillboard
+        target={botHandleRef}
+        getHp={() => matchCtl.getHp(1)}
+        maxHp={320}
+      />
+      {/* Floating damage numbers spawned by hitProjectile. */}
+      {damageFloaters.map((f) => (
+        <DamageNumber
+          key={f.id}
+          origin={f.origin}
+          value={f.value}
+          flavor={f.flavor}
+          onExpire={() => expireFloater(f.id)}
+        />
+      ))}
       {projectiles.map((p) => (
         <Projectile
           key={p.id}
